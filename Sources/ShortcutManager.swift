@@ -37,6 +37,7 @@ class ShortcutManager {
     var triggerKey: TriggerKey = .leftShift
     var doublePressTimeout: TimeInterval = 0.40
     var cmdDoubleAEnabled: Bool = false
+    var switchLayoutAfterConversion: Bool = false
 
     private var lastDownTime: TimeInterval = 0   // for modifier double-press
     private var lastCmdATime: TimeInterval = 0   // for Cmd+A+A
@@ -137,6 +138,9 @@ class ShortcutManager {
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 self.restoreClipboard(savedContents)
+                if self.switchLayoutAfterConversion {
+                    self.converter.switchInputSourceToLastTarget()
+                }
             }
         }
     }

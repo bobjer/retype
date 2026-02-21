@@ -80,6 +80,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Cmd+A+A shortcut
         shortcutManager.cmdDoubleAEnabled = defaults.bool(forKey: "cmdDoubleAEnabled")
+
+        // Switch layout after conversion
+        shortcutManager.switchLayoutAfterConversion = defaults.bool(forKey: "switchLayoutAfterConversion")
     }
 
 

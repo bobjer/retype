@@ -30,6 +30,9 @@ class KeyboardConverter {
     var fromLayout: Layout?
     var toLayout: Layout?
 
+    /// The layout that was actually used as the conversion target (set after each convert() call)
+    private(set) var lastConvertedToLayout: Layout?
+
     init() {
         installedLayouts = Self.loadInstalledLayouts()
     }
@@ -46,9 +49,25 @@ class KeyboardConverter {
             if to.key(for: char) != nil { reverseMatches += 1 }
         }
 
-        return forwardMatches >= reverseMatches
-            ? Self.map(text, from: from, to: to)
-            : Self.map(text, from: to, to: from)
+        if forwardMatches >= reverseMatches {
+            lastConvertedToLayout = to
+            return Self.map(text, from: from, to: to)
+        } else {
+            lastConvertedToLayout = from
+            return Self.map(text, from: to, to: from)
+        }
+    }
+
+    /// Switch the system input source to the layout we just converted into
+    func switchInputSourceToLastTarget() {
+        guard let targetID = lastConvertedToLayout?.id else { return }
+        let filter = [kTISPropertyInputSourceID: targetID] as CFDictionary
+        guard let unmanaged = TISCreateInputSourceList(filter, false) else { return }
+        let list = unmanaged.takeRetainedValue()
+        guard CFArrayGetCount(list) > 0,
+              let rawPtr = CFArrayGetValueAtIndex(list, 0) else { return }
+        let source = Unmanaged<TISInputSource>.fromOpaque(rawPtr).takeUnretainedValue()
+        TISSelectInputSource(source)
     }
 
     private static func map(_ text: String, from: Layout, to: Layout) -> String {

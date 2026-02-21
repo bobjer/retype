@@ -1,10 +1,11 @@
 import Cocoa
 import ServiceManagement
 
-private let kFromLayoutID        = "fromLayoutID"
-private let kToLayoutID          = "toLayoutID"
-private let kTriggerKeyRaw       = "triggerKeyRaw"
-private let kDoublePressTimeout  = "doublePressTimeout"
+private let kFromLayoutID              = "fromLayoutID"
+private let kToLayoutID                = "toLayoutID"
+private let kTriggerKeyRaw             = "triggerKeyRaw"
+private let kDoublePressTimeout        = "doublePressTimeout"
+private let kSwitchLayoutAfterConvert  = "switchLayoutAfterConversion"
 
 class SettingsWindowController: NSWindowController {
 
@@ -26,7 +27,7 @@ class SettingsWindowController: NSWindowController {
         self.shortcutManager = shortcutManager
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 390, height: 310),
+            contentRect: NSRect(x: 0, y: 0, width: 390, height: 350),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -55,6 +56,7 @@ class SettingsWindowController: NSWindowController {
             root.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
             root.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             root.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+            root.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -20),
         ])
 
         root.addArrangedSubview(sectionLabel("Conversion"))
@@ -107,6 +109,13 @@ class SettingsWindowController: NSWindowController {
         )
         cmdDoubleACheckbox.state = shortcutManager.cmdDoubleAEnabled ? .on : .off
         root.addArrangedSubview(cmdDoubleACheckbox)
+
+        let switchLayoutCheckbox = NSButton(
+            checkboxWithTitle: "Switch keyboard layout after conversion",
+            target: self, action: #selector(switchLayoutToggled(_:))
+        )
+        switchLayoutCheckbox.state = shortcutManager.switchLayoutAfterConversion ? .on : .off
+        root.addArrangedSubview(switchLayoutCheckbox)
 
         root.addArrangedSubview(separatorView())
 
@@ -216,6 +225,12 @@ class SettingsWindowController: NSWindowController {
         let enabled = sender.state == .on
         shortcutManager.cmdDoubleAEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: "cmdDoubleAEnabled")
+    }
+
+    @objc private func switchLayoutToggled(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        shortcutManager.switchLayoutAfterConversion = enabled
+        UserDefaults.standard.set(enabled, forKey: kSwitchLayoutAfterConvert)
     }
 
     @objc private func launchToggled(_ sender: NSButton) {
