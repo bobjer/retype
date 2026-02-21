@@ -57,6 +57,18 @@ open build/Retype.app
 
 Requires Xcode Command Line Tools (`xcode-select --install`).
 
+## Troubleshooting
+
+**Hotkey does nothing after granting Accessibility permission**
+
+macOS ties accessibility permissions to the app's code signature. After rebuilding or reinstalling, the old entry can go stale. Reset it:
+
+```bash
+tccutil reset Accessibility com.retype.app
+```
+
+Then relaunch Retype and grant permission again when prompted.
+
 ## License
 
 Creative Commons CC0 1.0 Universal
