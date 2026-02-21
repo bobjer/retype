@@ -2,10 +2,10 @@ cask "retype" do
   version "1.0"
   sha256 "fe00e262a91dae5b23368749efc1cd91863c461e1b436105f7ff14dcdfcd31f4"
 
-  url "file:///Users/dmytroblankovskyi/Sync/1projects/retype/build/Retype-1.0.zip"
+  url "https://github.com/bobjer/retype/releases/download/v#{version}/Retype-#{version}.zip"
   name "Retype"
   desc "Convert mistyped text between keyboard layouts with a hotkey"
-  homepage "https://github.com/dmytroblankovskyi/retype"
+  homepage "https://github.com/bobjer/retype"
 
   depends_on macos: ">= :ventura"
 
