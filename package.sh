@@ -26,7 +26,7 @@ cask "retype" do
   url "file://${FULL_PATH}"
   name "Retype"
   desc "Convert mistyped text between keyboard layouts with a hotkey"
-  homepage "https://github.com/dmytroblankovskyi/retype"
+  homepage "https://github.com/bobjer/retype"
 
   depends_on macos: ">= :ventura"
 

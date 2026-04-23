@@ -4,6 +4,8 @@ set -e
 APP_NAME="Retype"
 BUILD_DIR="build"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+ARCH="$(uname -m)"
+MODULE_CACHE="/tmp/retype-module-cache"
 
 echo "Building ${APP_NAME}..."
 
@@ -13,6 +15,9 @@ mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 swiftc \
+    -swift-version 5 \
+    -module-cache-path "${MODULE_CACHE}" \
+    -target "${ARCH}-apple-macosx13.0" \
     Sources/main.swift \
     Sources/KeyboardConverter.swift \
     Sources/ShortcutManager.swift \
@@ -25,6 +30,7 @@ swiftc \
     -suppress-warnings
 
 cp Resources/Info.plist "${APP_BUNDLE}/Contents/"
+cp Resources/Retype.icns "${APP_BUNDLE}/Contents/Resources/"
 
 codesign --force --sign - "${APP_BUNDLE}"
 

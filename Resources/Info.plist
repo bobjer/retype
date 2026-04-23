@@ -6,6 +6,8 @@
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>Retype</string>
+    <key>CFBundleIconFile</key>
+    <string>Retype</string>
     <key>CFBundleIdentifier</key>
     <string>com.retype.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
