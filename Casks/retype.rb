@@ -1,13 +1,14 @@
 cask "retype" do
   version "1.1"
-  sha256 "3feaa8cb4918dd078a655ece6ad5a9f52d25f2e6b884944a3261067e5cabbf66"
+  sha256 "db8c8f788082b39e0e11086fcf83c5cdc68bb4aaa3a66b78e339587129d206c2"
 
   url "https://github.com/bobjer/retype/releases/download/v#{version}/Retype-#{version}.zip"
   name "Retype"
   desc "Convert mistyped text between keyboard layouts with a hotkey"
   homepage "https://github.com/bobjer/retype"
 
-  depends_on macos: ">= :ventura"
+  depends_on arch: :arm64
+  depends_on macos: ">= :tahoe"
 
   app "Retype.app"
 
