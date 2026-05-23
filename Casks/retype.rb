@@ -8,7 +8,7 @@ cask "retype" do
   homepage "https://github.com/bobjer/retype"
 
   depends_on arch: :arm64
-  depends_on macos: ">= :tahoe"
+  depends_on macos: :tahoe
 
   app "Retype.app"
 
