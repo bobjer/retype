@@ -4,6 +4,7 @@ set -e
 APP_NAME="Retype"
 BUILD_DIR="build"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+VERSION="$(tr -d '[:space:]' < VERSION)"
 
 echo "Building ${APP_NAME}..."
 
@@ -14,6 +15,7 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 swiftc \
     Sources/main.swift \
+    Sources/AppSettings.swift \
     Sources/KeyboardConverter.swift \
     Sources/ShortcutManager.swift \
     Sources/AppDelegate.swift \
@@ -21,10 +23,10 @@ swiftc \
     -o "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" \
     -framework Cocoa \
     -framework Carbon \
-    -framework ServiceManagement \
-    -suppress-warnings
+    -framework ServiceManagement
 
 cp Resources/Info.plist "${APP_BUNDLE}/Contents/"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
 
 codesign --force --sign - "${APP_BUNDLE}"
 

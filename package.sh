@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="1.1"
+VERSION="$(tr -d '[:space:]' < VERSION)"
 ZIP_NAME="Retype-${VERSION}.zip"
 TAP_NAME="local/retype"
 TAP_REPO_DIR="$(brew --repository)/Library/Taps/local/homebrew-retype"

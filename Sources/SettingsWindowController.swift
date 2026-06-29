@@ -1,16 +1,11 @@
 import Cocoa
 import ServiceManagement
 
-private let kFromLayoutID              = "fromLayoutID"
-private let kToLayoutID                = "toLayoutID"
-private let kTriggerKeyRaw             = "triggerKeyRaw"
-private let kDoublePressTimeout        = "doublePressTimeout"
-private let kSwitchLayoutAfterConvert  = "switchLayoutAfterConversion"
-
 class SettingsWindowController: NSWindowController {
 
     private let converter:      KeyboardConverter
     private let shortcutManager: ShortcutManager
+    private let settings: AppSettings
 
     private var fromPopup:    NSPopUpButton!
     private var toPopup:      NSPopUpButton!
@@ -22,12 +17,13 @@ class SettingsWindowController: NSWindowController {
     // Cached layouts list
     private var layouts: [KeyboardConverter.Layout] = []
 
-    init(converter: KeyboardConverter, shortcutManager: ShortcutManager) {
+    init(converter: KeyboardConverter, shortcutManager: ShortcutManager, settings: AppSettings) {
         self.converter       = converter
         self.shortcutManager = shortcutManager
+        self.settings        = settings
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 390, height: 350),
+            contentRect: NSRect(x: 0, y: 0, width: 390, height: 380),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -72,6 +68,13 @@ class SettingsWindowController: NSWindowController {
 
         root.addArrangedSubview(makeRow(label: "From layout:", control: fromPopup))
         root.addArrangedSubview(makeRow(label: "To layout:",   control: toPopup))
+
+        let includeOptionCheckbox = NSButton(
+            checkboxWithTitle: "Convert Option/Alt characters",
+            target: self, action: #selector(includeOptionToggled(_:))
+        )
+        includeOptionCheckbox.state = converter.includeOptionModifierVariants ? .on : .off
+        root.addArrangedSubview(includeOptionCheckbox)
 
         root.addArrangedSubview(separatorView())
 
@@ -138,11 +141,11 @@ class SettingsWindowController: NSWindowController {
         let toIdx   = max(0, toPopup.indexOfSelectedItem)
         if fromIdx < layouts.count {
             converter.fromLayout = layouts[fromIdx]
-            UserDefaults.standard.set(layouts[fromIdx].id, forKey: kFromLayoutID)
+            settings.fromLayoutID = layouts[fromIdx].id
         }
         if toIdx < layouts.count {
             converter.toLayout = layouts[toIdx]
-            UserDefaults.standard.set(layouts[toIdx].id, forKey: kToLayoutID)
+            settings.toLayoutID = layouts[toIdx].id
         }
     }
 
@@ -195,7 +198,7 @@ class SettingsWindowController: NSWindowController {
         guard idx >= 0, idx < layouts.count else { return }
         let layout = layouts[idx]
         converter.fromLayout = layout
-        UserDefaults.standard.set(layout.id, forKey: kFromLayoutID)
+        settings.fromLayoutID = layout.id
     }
 
     @objc private func toChanged(_ sender: NSPopUpButton) {
@@ -203,14 +206,14 @@ class SettingsWindowController: NSWindowController {
         guard idx >= 0, idx < layouts.count else { return }
         let layout = layouts[idx]
         converter.toLayout = layout
-        UserDefaults.standard.set(layout.id, forKey: kToLayoutID)
+        settings.toLayoutID = layout.id
     }
 
     @objc private func triggerChanged(_ sender: NSPopUpButton) {
         let tag = sender.selectedItem?.tag ?? TriggerKey.leftShift.rawValue
         if let key = TriggerKey(rawValue: tag) {
             shortcutManager.triggerKey = key
-            UserDefaults.standard.set(key.rawValue, forKey: kTriggerKeyRaw)
+            settings.triggerKeyRaw = key.rawValue
         }
     }
 
@@ -218,19 +221,25 @@ class SettingsWindowController: NSWindowController {
         let val = sender.doubleValue
         shortcutManager.doublePressTimeout = val
         timeoutLabel.stringValue = String(format: "%.2f s", val)
-        UserDefaults.standard.set(val, forKey: kDoublePressTimeout)
+        settings.doublePressTimeout = val
     }
 
     @objc private func cmdDoubleAToggled(_ sender: NSButton) {
         let enabled = sender.state == .on
         shortcutManager.cmdDoubleAEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: "cmdDoubleAEnabled")
+        settings.cmdDoubleAEnabled = enabled
     }
 
     @objc private func switchLayoutToggled(_ sender: NSButton) {
         let enabled = sender.state == .on
         shortcutManager.switchLayoutAfterConversion = enabled
-        UserDefaults.standard.set(enabled, forKey: kSwitchLayoutAfterConvert)
+        settings.switchLayoutAfterConversion = enabled
+    }
+
+    @objc private func includeOptionToggled(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        converter.includeOptionModifierVariants = enabled
+        settings.includeOptionModifierVariants = enabled
     }
 
     @objc private func launchToggled(_ sender: NSButton) {

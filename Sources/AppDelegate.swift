@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var converter: KeyboardConverter!
     private var shortcutManager: ShortcutManager!
+    private let settings = AppSettings()
     private var settingsController: SettingsWindowController?
 
     private var isEnabled = true
@@ -35,6 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.accessibilityPollTimer = nil
                     self.shortcutManager.stop()
                     self.shortcutManager.start()
+                    self.updateAccessibilityMenuItem(trusted: true)
                 }
             }
         }
@@ -45,44 +47,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applyStoredSettings() {
-        let defaults = UserDefaults.standard
         let layouts  = converter.installedLayouts
 
         // From layout — restore or default to first layout
-        if let id = defaults.string(forKey: "fromLayoutID"),
+        if let id = settings.fromLayoutID,
            let layout = layouts.first(where: { $0.id == id }) {
             converter.fromLayout = layout
         } else {
             let first = layouts.first
             converter.fromLayout = first
-            defaults.set(first?.id, forKey: "fromLayoutID")
+            settings.fromLayoutID = first?.id
         }
 
         // To layout — restore or default to second distinct layout
-        if let id = defaults.string(forKey: "toLayoutID"),
+        if let id = settings.toLayoutID,
            let layout = layouts.first(where: { $0.id == id }) {
             converter.toLayout = layout
         } else {
             let second = layouts.first { $0.id != converter.fromLayout?.id }
             converter.toLayout = second
-            defaults.set(second?.id, forKey: "toLayoutID")
+            settings.toLayoutID = second?.id
         }
 
         // Trigger key
-        if let raw = defaults.value(forKey: "triggerKeyRaw") as? Int,
+        if let raw = settings.triggerKeyRaw,
            let key = TriggerKey(rawValue: raw) {
             shortcutManager.triggerKey = key
         }
 
         // Timeout
-        let timeout = defaults.double(forKey: "doublePressTimeout")
-        if timeout > 0 { shortcutManager.doublePressTimeout = timeout }
+        if let timeout = settings.doublePressTimeout {
+            shortcutManager.doublePressTimeout = timeout
+        }
 
         // Cmd+A+A shortcut
-        shortcutManager.cmdDoubleAEnabled = defaults.bool(forKey: "cmdDoubleAEnabled")
+        shortcutManager.cmdDoubleAEnabled = settings.cmdDoubleAEnabled
+
+        // Option/Alt modifier variants
+        converter.includeOptionModifierVariants = settings.includeOptionModifierVariants
 
         // Switch layout after conversion
-        shortcutManager.switchLayoutAfterConversion = defaults.bool(forKey: "switchLayoutAfterConversion")
+        shortcutManager.switchLayoutAfterConversion = settings.switchLayoutAfterConversion
     }
 
 
@@ -109,6 +114,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         accessibilityMenuItem = NSMenuItem(title: "", action: #selector(openAccessibilitySettings),
                                            keyEquivalent: "")
         accessibilityMenuItem.target = self
+        updateAccessibilityMenuItem(trusted: AXIsProcessTrusted())
         menu.addItem(accessibilityMenuItem)
 
         menu.addItem(.separator())
@@ -148,11 +154,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    private func updateAccessibilityMenuItem(trusted: Bool) {
+        if trusted {
+            accessibilityMenuItem.title  = "Accessibility granted"
+            accessibilityMenuItem.action = nil
+        } else {
+            accessibilityMenuItem.title  = "Accessibility not granted - click to fix"
+            accessibilityMenuItem.action = #selector(openAccessibilitySettings)
+        }
+    }
+
     @objc private func openSettings() {
         if settingsController == nil {
             settingsController = SettingsWindowController(
                 converter: converter,
-                shortcutManager: shortcutManager
+                shortcutManager: shortcutManager,
+                settings: settings
             )
         }
         settingsController?.showWindow(nil)
@@ -166,13 +183,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
-        let trusted = AXIsProcessTrusted()
-        if trusted {
-            accessibilityMenuItem.title  = "✓ Accessibility granted"
-            accessibilityMenuItem.action = nil
-        } else {
-            accessibilityMenuItem.title  = "⚠️ Accessibility not granted — click to fix"
-            accessibilityMenuItem.action = #selector(openAccessibilitySettings)
-        }
+        updateAccessibilityMenuItem(trusted: AXIsProcessTrusted())
     }
 }

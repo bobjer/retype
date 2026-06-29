@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Configurable Option/Alt character conversion, enabled by default
+- SwiftPM package metadata, XCTest unit tests, and macOS CI
+- Optional system-layout smoke test for installed keyboard layouts
+
+### Changed
+- Centralized app settings in one `UserDefaults` wrapper
+- Build/package scripts now read app version from `VERSION`
+
 ## [1.1] — 2026-02-21
 
 ### Added

@@ -3,22 +3,37 @@ import Foundation
 
 class KeyboardConverter {
 
+    struct ModifierState: OptionSet, Hashable {
+        let rawValue: UInt32
+
+        static let shift = ModifierState(rawValue: 2)
+        static let option = ModifierState(rawValue: 8)
+    }
+
+    struct KeyStroke: Hashable {
+        let keyCode: Int
+        let modifiers: ModifierState
+    }
+
     struct Layout: Identifiable, Hashable {
         let id: String
         let name: String
 
-        // char → (keyCode, isShifted)
-        let charToKey: [Character: (keyCode: Int, shifted: Bool)]
-        // keyCode → unshifted/shifted character
-        let keyToChar: [Int: Character]
-        let keyToCharShifted: [Int: Character]
+        // char -> physical key + modifier state
+        let charToKey: [Character: KeyStroke]
+        // physical key + modifier state -> character
+        let keyStrokeToChar: [KeyStroke: Character]
 
-        func key(for char: Character) -> (keyCode: Int, shifted: Bool)? {
-            charToKey[char]
+        func key(for char: Character, includingOption: Bool) -> KeyStroke? {
+            guard let keyStroke = charToKey[char] else { return nil }
+            if !includingOption && keyStroke.modifiers.contains(.option) {
+                return nil
+            }
+            return keyStroke
         }
 
-        func char(for keyCode: Int, shifted: Bool) -> Character? {
-            shifted ? keyToCharShifted[keyCode] : keyToChar[keyCode]
+        func char(for keyStroke: KeyStroke) -> Character? {
+            keyStrokeToChar[keyStroke]
         }
 
         // Hashable/Equatable based on ID only
@@ -29,12 +44,17 @@ class KeyboardConverter {
     private(set) var installedLayouts: [Layout] = []
     var fromLayout: Layout?
     var toLayout: Layout?
+    var includeOptionModifierVariants = true
 
     /// The layout that was actually used as the conversion target (set after each convert() call)
     private(set) var lastConvertedToLayout: Layout?
 
-    init() {
-        installedLayouts = Self.loadInstalledLayouts()
+    convenience init() {
+        self.init(layouts: KeyboardConverter.loadInstalledLayouts())
+    }
+
+    init(layouts: [Layout]) {
+        installedLayouts = layouts
     }
 
     func convert(_ text: String) -> String {
@@ -45,16 +65,16 @@ class KeyboardConverter {
         var reverseMatches = 0
         for char in text {
             if char.isWhitespace || char.isNewline { continue }
-            if from.key(for: char) != nil { forwardMatches += 1 }
-            if to.key(for: char) != nil { reverseMatches += 1 }
+            if from.key(for: char, includingOption: includeOptionModifierVariants) != nil { forwardMatches += 1 }
+            if to.key(for: char, includingOption: includeOptionModifierVariants) != nil { reverseMatches += 1 }
         }
 
         if forwardMatches >= reverseMatches {
             lastConvertedToLayout = to
-            return Self.map(text, from: from, to: to)
+            return Self.map(text, from: from, to: to, includingOption: includeOptionModifierVariants)
         } else {
             lastConvertedToLayout = from
-            return Self.map(text, from: to, to: from)
+            return Self.map(text, from: to, to: from, includingOption: includeOptionModifierVariants)
         }
     }
 
@@ -70,10 +90,10 @@ class KeyboardConverter {
         TISSelectInputSource(source)
     }
 
-    private static func map(_ text: String, from: Layout, to: Layout) -> String {
+    private static func map(_ text: String, from: Layout, to: Layout, includingOption: Bool) -> String {
         String(text.map { char in
-            guard let key = from.key(for: char) else { return char }
-            return to.char(for: key.keyCode, shifted: key.shifted) ?? char
+            guard let key = from.key(for: char, includingOption: includingOption) else { return char }
+            return to.char(for: key) ?? char
         })
     }
 
@@ -113,34 +133,32 @@ class KeyboardConverter {
         let id   = Unmanaged<CFString>.fromOpaque(idPtr).takeUnretainedValue() as String
         let data = Unmanaged<CFData>.fromOpaque(dataPtr).takeUnretainedValue()
 
-        var keyToChar:        [Int: Character] = [:]
-        var keyToCharShifted: [Int: Character] = [:]
-        var charToKey: [Character: (keyCode: Int, shifted: Bool)] = [:]
+        var keyStrokeToChar: [KeyStroke: Character] = [:]
+        var charToKey: [Character: KeyStroke] = [:]
 
         for keyCode in printableKeyCodes {
-            if let c = translateKey(keyCode: keyCode, shifted: false, data: data) {
-                keyToChar[keyCode] = c
-                if charToKey[c] == nil { charToKey[c] = (keyCode, false) }
-            }
-            if let c = translateKey(keyCode: keyCode, shifted: true, data: data) {
-                keyToCharShifted[keyCode] = c
-                if charToKey[c] == nil { charToKey[c] = (keyCode, true) }
+            for modifiers in supportedModifierStates {
+                guard let c = translateKey(keyCode: keyCode, modifiers: modifiers, data: data) else {
+                    continue
+                }
+
+                let keyStroke = KeyStroke(keyCode: keyCode, modifiers: modifiers)
+                keyStrokeToChar[keyStroke] = c
+                if charToKey[c] == nil { charToKey[c] = keyStroke }
             }
         }
 
         guard !charToKey.isEmpty else { return nil }
         return Layout(id: id, name: name, charToKey: charToKey,
-                      keyToChar: keyToChar, keyToCharShifted: keyToCharShifted)
+                      keyStrokeToChar: keyStrokeToChar)
     }
 
     /// Translate a physical keyCode + shift state to the character it produces
     /// in the given keyboard layout data, using UCKeyTranslate
-    private static func translateKey(keyCode: Int, shifted: Bool, data: CFData) -> Character? {
+    private static func translateKey(keyCode: Int, modifiers: ModifierState, data: CFData) -> Character? {
         let ptr = CFDataGetBytePtr(data)!
         let keyboard = UnsafeRawPointer(ptr).assumingMemoryBound(to: UCKeyboardLayout.self)
 
-        // modifierKeyState: 0 = none, 2 = Shift
-        let modState: UInt32 = shifted ? 2 : 0
         var deadKeyState: UInt32 = 0
         var chars = [UniChar](repeating: 0, count: 4)
         var charCount = 0
@@ -149,7 +167,7 @@ class KeyboardConverter {
             keyboard,
             UInt16(keyCode),
             UInt16(kUCKeyActionDisplay),
-            modState,
+            modifiers.rawValue,
             UInt32(LMGetKbdType()),
             OptionBits(kUCKeyTranslateNoDeadKeysMask),
             &deadKeyState,
@@ -169,6 +187,13 @@ class KeyboardConverter {
 
         return char
     }
+
+    private static let supportedModifierStates: [ModifierState] = [
+        [],
+        .shift,
+        .option,
+        [.shift, .option],
+    ]
 
     // MARK: - Key codes for all printable keys (ANSI layout positions)
     // Numbers, letters, punctuation — excludes space, function keys, etc.

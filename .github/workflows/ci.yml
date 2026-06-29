@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests
+        run: ./test.sh
+      - name: Build app bundle
+        run: ./build.sh

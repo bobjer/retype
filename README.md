@@ -15,6 +15,8 @@ brew tap bobjer/retype
 brew install --cask retype
 ```
 
+Homebrew installs a prebuilt app bundle. Installing Retype this way does not require Xcode or Xcode Command Line Tools.
+
 > First launch: go to **System Settings → Privacy & Security → Accessibility** and enable Retype.
 
 ## Usage
@@ -30,6 +32,7 @@ The text is replaced with the correct layout version automatically.
 Click the **RT** icon in the menu bar → **Settings**:
 
 - **From / To layout** — which layouts to convert between
+- **Convert Option/Alt characters** — include characters typed with Option/Alt, enabled by default
 - **Trigger key** — Left Shift, Right Shift, Left Control, Left Option, Left Command
 - **Timeout** — how fast the double-press must be (0.2–1.0 s)
 - **Cmd+A+A** — alternative trigger: hold ⌘, press A twice (selects all + converts)
@@ -56,6 +59,27 @@ open build/Retype.app
 ```
 
 Requires Xcode Command Line Tools (`xcode-select --install`).
+
+Run unit tests with full Xcode available:
+
+```bash
+./test.sh
+```
+
+Run the optional installed-layout smoke test with:
+
+```bash
+./smoke-system-layouts.sh
+```
+
+## Packaging
+
+`./package.sh` is a developer command. It builds a signed app bundle, zips it, and writes a Homebrew Cask that installs that prebuilt zip. End users who install the generated cask do not need Xcode because the cask does not compile source.
+
+Packaging requirements for the developer machine:
+
+- Xcode Command Line Tools for `swiftc`
+- Homebrew for generating/updating the local cask tap
 
 ## Troubleshooting
 
