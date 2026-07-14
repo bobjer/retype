@@ -7,7 +7,8 @@ cask "retype" do
   desc "Convert mistyped text between keyboard layouts with a hotkey"
   homepage "https://github.com/bobjer/retype"
 
-  depends_on macos: ">= :ventura"
+  depends_on arch: :arm64
+  depends_on macos: :tahoe
 
   app "Retype.app"
 end

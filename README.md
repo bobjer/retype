@@ -6,7 +6,7 @@ Typed `ghbdtn` when you meant `привіт`? Select the text, double-press the 
 
 Works with any two keyboard layouts installed on your Mac.
 
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
+![macOS 26+](https://img.shields.io/badge/macOS-26%2B-blue) ![Swift](https://img.shields.io/badge/Swift-6.2-orange)
 
 ## Install
 
@@ -43,7 +43,7 @@ The Settings window includes a sample-text preview. Automatic mode leaves ambigu
 
 ## Requirements
 
-- macOS 13 Ventura or later
+- Apple Silicon Mac running macOS 26 Tahoe or later
 - Accessibility permission (for receiving global keyboard events and replacing selected text)
 
 ## How it works
