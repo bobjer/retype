@@ -8,6 +8,22 @@ Works with any two keyboard layouts installed on your Mac.
 
 ![macOS 26+](https://img.shields.io/badge/macOS-26%2B-blue) ![Swift](https://img.shields.io/badge/Swift-6.2-orange)
 
+## Install with Homebrew
+
+```bash
+brew tap bobjer/retype
+brew install --cask retype
+```
+
+To install a newer release later:
+
+```bash
+brew update
+brew upgrade --cask retype
+```
+
+No Apple Developer account is needed. Retype is built for local self-use and is ad-hoc signed.
+
 > First launch: go to **System Settings → Privacy & Security → Accessibility** and enable Retype.
 
 ## Usage
