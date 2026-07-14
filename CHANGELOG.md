@@ -13,7 +13,7 @@
 ### Changed
 - Centralized app settings in one `UserDefaults` wrapper
 - Build/package scripts now read app version from `VERSION`
-- Release packaging now requires Developer ID signing and notarization
+- Packaging is ad-hoc signed for local use and requires no Apple Developer account
 
 ## [1.1] — 2026-02-21
 

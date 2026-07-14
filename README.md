@@ -8,15 +8,6 @@ Works with any two keyboard layouts installed on your Mac.
 
 ![macOS 26+](https://img.shields.io/badge/macOS-26%2B-blue) ![Swift](https://img.shields.io/badge/Swift-6.2-orange)
 
-## Install
-
-```bash
-brew tap bobjer/retype
-brew install --cask retype
-```
-
-Homebrew installs a prebuilt app bundle. Installing Retype this way does not require Xcode or Xcode Command Line Tools.
-
 > First launch: go to **System Settings → Privacy & Security → Accessibility** and enable Retype.
 
 ## Usage
@@ -77,15 +68,7 @@ Run the optional installed-layout smoke test with:
 
 ## Packaging
 
-`./package.sh` is the release command. It requires a Developer ID Application certificate and a `notarytool` keychain profile, then signs, notarizes, staples, and packages the app. It renders the Cask only after calculating the SHA-256 of the final notarized zip.
-
-Packaging requirements for the developer machine:
-
-- Xcode command-line tools
-- `SIGNING_IDENTITY` with a Developer ID Application certificate
-- `NOTARY_PROFILE` stored with `xcrun notarytool store-credentials`
-
-The tag workflow publishes `v<version>` and updates `bobjer/homebrew-retype`. It requires the Apple signing/notarization secrets and `HOMEBREW_TAP_TOKEN`; the workflow fails explicitly when they are missing.
+`./package.sh` builds an ad-hoc-signed local zip in `build/`. It needs no Apple Developer account, certificate, notarization profile, or external service. Run the app directly from `build/Retype.app`.
 
 ## Troubleshooting
 
