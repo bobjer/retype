@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.1] — 2026-07-14
+
+### Fixed
+- Preserve the Accessibility grant across ad-hoc-signed self-use updates
+
 ## [1.2] — 2026-07-14
 
 ### Added

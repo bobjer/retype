@@ -22,6 +22,8 @@ cp Resources/Retype.icns "${APP_BUNDLE}/Contents/Resources/"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${APP_BUNDLE}/Contents/Info.plist"
 
-codesign --force --sign - "$APP_BUNDLE"
+# Keep the local code requirement stable across ad-hoc-signed updates so TCC
+# can retain the Accessibility grant for this bundle identifier.
+codesign --force --sign - -r='designated => identifier "com.retype.app"' "$APP_BUNDLE"
 
 echo "Build successful: ${APP_BUNDLE}"
