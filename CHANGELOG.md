@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.2] — 2026-07-14
 
 ### Added
 - Configurable Option/Alt character conversion, enabled by default
