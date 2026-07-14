@@ -38,6 +38,38 @@ final class KeyboardConverterTests: XCTestCase {
         XCTAssertEqual(converter.convert("  ы\n"), "  ß\n")
     }
 
+    func testAutomaticConversionStopsWhenBothDirectionsHaveEqualEvidence() {
+        let converter = makeConverter(includeOption: true)
+
+        XCTAssertEqual(
+            converter.conversion(for: "aф"),
+            .ambiguous(forward: "фф", reverse: "aa")
+        )
+        XCTAssertEqual(converter.convert("aф"), "aф")
+    }
+
+    func testExplicitDirectionConvertsAmbiguousText() {
+        let converter = makeConverter(includeOption: true)
+
+        XCTAssertEqual(
+            converter.conversion(for: "aф", direction: .fromTo),
+            .converted("фф")
+        )
+        XCTAssertEqual(
+            converter.conversion(for: "aф", direction: .toFrom),
+            .converted("aa")
+        )
+    }
+
+    func testSameLayoutPairIsUnavailable() {
+        let converter = KeyboardConverter(layouts: [Self.english])
+        converter.fromLayout = Self.english
+        converter.toLayout = Self.english
+
+        XCTAssertFalse(converter.hasUsableLayoutPair)
+        XCTAssertEqual(converter.conversion(for: "a"), .unavailable)
+    }
+
     private func makeConverter(includeOption: Bool) -> KeyboardConverter {
         let converter = KeyboardConverter(layouts: [Self.english, Self.ukrainian])
         converter.fromLayout = Self.english

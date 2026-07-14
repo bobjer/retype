@@ -6,10 +6,14 @@
 - Configurable Option/Alt character conversion, enabled by default
 - SwiftPM package metadata, XCTest unit tests, and macOS CI
 - Optional system-layout smoke test for installed keyboard layouts
+- Serialized clipboard conversion transactions with ownership-safe restoration
+- Explicit conversion direction and a Settings preview for ambiguous text
+- ISO/JIS printable key coverage and multi-unit Unicode translation handling
 
 ### Changed
 - Centralized app settings in one `UserDefaults` wrapper
 - Build/package scripts now read app version from `VERSION`
+- Release packaging now requires Developer ID signing and notarization
 
 ## [1.1] — 2026-02-21
 

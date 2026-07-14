@@ -9,6 +9,7 @@ struct AppSettings {
         static let cmdDoubleAEnabled = "cmdDoubleAEnabled"
         static let switchLayoutAfterConversion = "switchLayoutAfterConversion"
         static let includeOptionModifierVariants = "includeOptionModifierVariants"
+        static let conversionDirection = "conversionDirection"
     }
 
     private let defaults: UserDefaults
@@ -58,5 +59,16 @@ struct AppSettings {
             return defaults.bool(forKey: Key.includeOptionModifierVariants)
         }
         nonmutating set { defaults.set(newValue, forKey: Key.includeOptionModifierVariants) }
+    }
+
+    var conversionDirection: KeyboardConverter.ConversionDirection {
+        get {
+            guard
+                let rawValue = defaults.string(forKey: Key.conversionDirection),
+                let direction = KeyboardConverter.ConversionDirection(rawValue: rawValue)
+            else { return .automatic }
+            return direction
+        }
+        nonmutating set { defaults.set(newValue.rawValue, forKey: Key.conversionDirection) }
     }
 }

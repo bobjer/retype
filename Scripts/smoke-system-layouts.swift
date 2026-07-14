@@ -14,8 +14,13 @@ struct SystemLayoutSmokeTest {
             exit(0)
         }
 
-        guard let latin = layouts.first(where: { $0.id != ukrainian.id }) else {
-            print("Skipped: no non-Ukrainian layout is installed")
+        // Pin to US/ABC: ß æ -> Option+s / Option+' is only stable on this layout.
+        // Other latin layouts (e.g. German) place these on different keys.
+        guard let latin = layouts.first(where: {
+            $0.id.localizedCaseInsensitiveContains("ABC") ||
+            $0.id.localizedCaseInsensitiveContains("US")
+        }) else {
+            print("Skipped: US/ABC layout is not installed")
             exit(0)
         }
 

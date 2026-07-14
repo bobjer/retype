@@ -32,6 +32,7 @@ enum TriggerKey: Int, CaseIterable {
 class ShortcutManager {
 
     private let converter: KeyboardConverter
+    var onResult: ((ConversionTransactionResult) -> Void)?
 
     // Configurable settings
     var triggerKey: TriggerKey = .leftShift
@@ -43,6 +44,14 @@ class ShortcutManager {
     private var lastCmdATime: TimeInterval = 0   // for Cmd+A+A
     private var globalFlagsMonitor: Any?
     private var globalKeyMonitor: Any?
+    private lazy var transaction = ConversionTransaction(
+        convert: { [weak self] text in
+            self?.converter.conversion(for: text) ?? .unavailable
+        },
+        completion: { [weak self] result in
+            self?.handleTransactionResult(result)
+        }
+    )
 
     init(converter: KeyboardConverter) {
         self.converter = converter
@@ -67,9 +76,9 @@ class ShortcutManager {
                 let now = ProcessInfo.processInfo.systemUptime
                 if self.lastCmdATime > 0 && (now - self.lastCmdATime) < self.doublePressTimeout {
                     self.lastCmdATime = 0
-                    // Text is already selected by the first Cmd+A — go straight to copy/convert/paste
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                        self?.performConversion()
+                    // Let the original Cmd+A finish selecting before reading the selection.
+                    DispatchQueue.main.async { [weak self] in
+                        self?.startConversion()
                     }
                 } else {
                     self.lastCmdATime = now
@@ -99,87 +108,22 @@ class ShortcutManager {
 
         if lastDownTime > 0 && (now - lastDownTime) < doublePressTimeout {
             lastDownTime = 0
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                self?.performConversion()
+            DispatchQueue.main.async { [weak self] in
+                self?.startConversion()
             }
         } else {
             lastDownTime = now
         }
     }
 
-    // MARK: - Conversion workflow
+    private func startConversion() {
+        transaction.start()
+    }
 
-    private func performConversion() {
-        let pasteboard = NSPasteboard.general
-        let changeCountBefore = pasteboard.changeCount
-        let savedContents = saveClipboard()
-
-        simulateKeyCombo(keyCode: 8, flags: .maskCommand) // Cmd+C
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) { [weak self] in
-            guard let self else { return }
-
-            guard pasteboard.changeCount != changeCountBefore else { return }
-
-            guard let text = pasteboard.string(forType: .string), !text.isEmpty else {
-                self.restoreClipboard(savedContents)
-                return
-            }
-
-            let converted = self.converter.convert(text)
-            guard converted != text else {
-                self.restoreClipboard(savedContents)
-                return
-            }
-
-            pasteboard.clearContents()
-            pasteboard.setString(converted, forType: .string)
-            self.simulateKeyCombo(keyCode: 9, flags: .maskCommand) // Cmd+V
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                self.restoreClipboard(savedContents)
-                if self.switchLayoutAfterConversion {
-                    self.converter.switchInputSourceToLastTarget()
-                }
-            }
+    private func handleTransactionResult(_ result: ConversionTransactionResult) {
+        if result == .converted, switchLayoutAfterConversion {
+            converter.switchInputSourceToLastTarget()
         }
-    }
-
-    private func simulateKeyCombo(keyCode: CGKeyCode, flags: CGEventFlags) {
-        let src = CGEventSource(stateID: .hidSystemState)
-        guard
-            let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true),
-            let up   = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false)
-        else { return }
-        down.flags = flags
-        down.post(tap: .cgSessionEventTap)
-        up.flags = flags
-        up.post(tap: .cgSessionEventTap)
-    }
-
-    // MARK: - Clipboard
-
-    private struct ClipboardSnapshot {
-        let types: [NSPasteboard.PasteboardType]
-        let data:  [NSPasteboard.PasteboardType: Data]
-    }
-
-    private func saveClipboard() -> [ClipboardSnapshot] {
-        (NSPasteboard.general.pasteboardItems ?? []).map { item in
-            var d: [NSPasteboard.PasteboardType: Data] = [:]
-            for t in item.types { if let v = item.data(forType: t) { d[t] = v } }
-            return ClipboardSnapshot(types: item.types, data: d)
-        }
-    }
-
-    private func restoreClipboard(_ snapshots: [ClipboardSnapshot]) {
-        guard !snapshots.isEmpty else { return }
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        for snap in snapshots {
-            let item = NSPasteboardItem()
-            for t in snap.types { if let v = snap.data[t] { item.setData(v, forType: t) } }
-            pb.writeObjects([item])
-        }
+        onResult?(result)
     }
 }

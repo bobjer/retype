@@ -3,9 +3,31 @@ import Foundation
 
 class KeyboardConverter {
 
+    enum ConversionDirection: String, CaseIterable {
+        case automatic
+        case fromTo
+        case toFrom
+
+        var displayName: String {
+            switch self {
+            case .automatic: return "Automatic (safe)"
+            case .fromTo:    return "From → To"
+            case .toFrom:    return "To → From"
+            }
+        }
+    }
+
+    enum ConversionResult: Equatable {
+        case converted(String)
+        case ambiguous(forward: String, reverse: String)
+        case unchanged
+        case unavailable
+    }
+
     struct ModifierState: OptionSet, Hashable {
         let rawValue: UInt32
 
+        // UCKeyTranslate modifierKeyState = Carbon modifier bits >> 8 (shiftKey 0x200 -> 2, optionKey 0x800 -> 8)
         static let shift = ModifierState(rawValue: 2)
         static let option = ModifierState(rawValue: 8)
     }
@@ -45,6 +67,7 @@ class KeyboardConverter {
     var fromLayout: Layout?
     var toLayout: Layout?
     var includeOptionModifierVariants = true
+    var conversionDirection: ConversionDirection = .automatic
 
     /// The layout that was actually used as the conversion target (set after each convert() call)
     private(set) var lastConvertedToLayout: Layout?
@@ -57,25 +80,56 @@ class KeyboardConverter {
         installedLayouts = layouts
     }
 
+    var hasUsableLayoutPair: Bool {
+        guard let from = fromLayout, let to = toLayout else { return false }
+        return from.id != to.id
+    }
+
     func convert(_ text: String) -> String {
-        guard let from = fromLayout, let to = toLayout else { return text }
+        switch conversion(for: text) {
+        case let .converted(converted): return converted
+        case .ambiguous, .unchanged, .unavailable: return text
+        }
+    }
 
-        // Auto-detect direction: count how many characters exist in each layout
-        var forwardMatches = 0
-        var reverseMatches = 0
-        for char in text {
-            if char.isWhitespace || char.isNewline { continue }
-            if from.key(for: char, includingOption: includeOptionModifierVariants) != nil { forwardMatches += 1 }
-            if to.key(for: char, includingOption: includeOptionModifierVariants) != nil { reverseMatches += 1 }
+    func conversion(for text: String, direction: ConversionDirection? = nil) -> ConversionResult {
+        guard let from = fromLayout, let to = toLayout, from.id != to.id else {
+            return .unavailable
         }
 
-        if forwardMatches >= reverseMatches {
-            lastConvertedToLayout = to
-            return Self.map(text, from: from, to: to, includingOption: includeOptionModifierVariants)
-        } else {
-            lastConvertedToLayout = from
-            return Self.map(text, from: to, to: from, includingOption: includeOptionModifierVariants)
+        let requestedDirection = direction ?? conversionDirection
+        let forward = Self.map(text, from: from, to: to, includingOption: includeOptionModifierVariants)
+        let reverse = Self.map(text, from: to, to: from, includingOption: includeOptionModifierVariants)
+
+        switch requestedDirection {
+        case .fromTo:
+            return complete(forward, target: to, original: text)
+        case .toFrom:
+            return complete(reverse, target: from, original: text)
+        case .automatic:
+            let evidence = Self.directionalEvidence(
+                in: text,
+                from: from,
+                to: to,
+                includingOption: includeOptionModifierVariants
+            )
+            if evidence.forward > evidence.reverse {
+                return complete(forward, target: to, original: text)
+            }
+            if evidence.reverse > evidence.forward {
+                return complete(reverse, target: from, original: text)
+            }
+            if forward == text && reverse == text {
+                return .unchanged
+            }
+            return .ambiguous(forward: forward, reverse: reverse)
         }
+    }
+
+    private func complete(_ converted: String, target: Layout, original: String) -> ConversionResult {
+        guard converted != original else { return .unchanged }
+        lastConvertedToLayout = target
+        return .converted(converted)
     }
 
     /// Switch the system input source to the layout we just converted into
@@ -95,6 +149,38 @@ class KeyboardConverter {
             guard let key = from.key(for: char, includingOption: includingOption) else { return char }
             return to.char(for: key) ?? char
         })
+    }
+
+    private static func directionalEvidence(
+        in text: String,
+        from: Layout,
+        to: Layout,
+        includingOption: Bool
+    ) -> (forward: Int, reverse: Int) {
+        var forward = 0
+        var reverse = 0
+
+        for char in text where !char.isWhitespace && !char.isNewline {
+            let forwardCharacter = mappedCharacter(char, from: from, to: to, includingOption: includingOption)
+            let reverseCharacter = mappedCharacter(char, from: to, to: from, includingOption: includingOption)
+
+            let supportsForward = forwardCharacter != char
+            let supportsReverse = reverseCharacter != char
+            if supportsForward && !supportsReverse { forward += 1 }
+            if supportsReverse && !supportsForward { reverse += 1 }
+        }
+
+        return (forward, reverse)
+    }
+
+    private static func mappedCharacter(
+        _ char: Character,
+        from: Layout,
+        to: Layout,
+        includingOption: Bool
+    ) -> Character {
+        guard let key = from.key(for: char, includingOption: includingOption) else { return char }
+        return to.char(for: key) ?? char
     }
 
     static func loadInstalledLayouts() -> [Layout] {
@@ -177,10 +263,11 @@ class KeyboardConverter {
         )
 
         guard err == noErr, charCount > 0 else { return nil }
-        guard let scalar = Unicode.Scalar(chars[0]) else { return nil }
-        let char = Character(scalar)
+        let translated = String(utf16CodeUnits: chars, count: charCount)
+        guard translated.count == 1, let char = translated.first else { return nil }
 
         // Filter out non-printable characters
+        guard let scalar = char.unicodeScalars.first else { return nil }
         let value = scalar.value
         guard value >= 0x20, value != 0x7F else { return nil }
         guard !char.isNewline else { return nil }
@@ -195,8 +282,9 @@ class KeyboardConverter {
         [.shift, .option],
     ]
 
-    // MARK: - Key codes for all printable keys (ANSI layout positions)
-    // Numbers, letters, punctuation — excludes space, function keys, etc.
+    // MARK: - Printable virtual key codes
+    // ANSI plus ISO section and JIS punctuation keys. Dead-key composition is deliberately
+    // excluded by kUCKeyTranslateNoDeadKeysMask, because it cannot be mapped one keystroke at a time.
     private static let printableKeyCodes: [Int] = [
         // Letters
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,  // a s d f h g z x
@@ -211,5 +299,8 @@ class KeyboardConverter {
         0x27, 0x29, 0x2A, // ' ; \
         0x2B, 0x2F, 0x2C, // , . /
         0x32,             // ` (grave / tilde)
+        // ISO / JIS printable keys
+        0x0A,             // ISO section
+        0x5D, 0x5E, 0x5F, // JIS yen, underscore, keypad comma
     ]
 }

@@ -9,10 +9,14 @@ class SettingsWindowController: NSWindowController {
 
     private var fromPopup:    NSPopUpButton!
     private var toPopup:      NSPopUpButton!
+    private var directionPopup: NSPopUpButton!
     private var triggerPopup: NSPopUpButton!
     private var timeoutSlider: NSSlider!
     private var timeoutLabel:  NSTextField!
     private var launchCheckbox: NSButton!
+    private var previewInput: NSTextField!
+    private var previewOutput: NSTextField!
+    private var validationLabel: NSTextField!
 
     // Cached layouts list
     private var layouts: [KeyboardConverter.Layout] = []
@@ -23,7 +27,7 @@ class SettingsWindowController: NSWindowController {
         self.settings        = settings
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 390, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 500),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -69,12 +73,42 @@ class SettingsWindowController: NSWindowController {
         root.addArrangedSubview(makeRow(label: "From layout:", control: fromPopup))
         root.addArrangedSubview(makeRow(label: "To layout:",   control: toPopup))
 
+        directionPopup = NSPopUpButton()
+        for direction in KeyboardConverter.ConversionDirection.allCases {
+            directionPopup.addItem(withTitle: direction.displayName)
+            directionPopup.lastItem?.representedObject = direction.rawValue
+        }
+        if let index = KeyboardConverter.ConversionDirection.allCases.firstIndex(of: converter.conversionDirection) {
+            directionPopup.selectItem(at: index)
+        }
+        directionPopup.target = self
+        directionPopup.action = #selector(directionChanged(_:))
+        root.addArrangedSubview(makeRow(label: "Direction:", control: directionPopup))
+
         let includeOptionCheckbox = NSButton(
             checkboxWithTitle: "Convert Option/Alt characters",
             target: self, action: #selector(includeOptionToggled(_:))
         )
         includeOptionCheckbox.state = converter.includeOptionModifierVariants ? .on : .off
         root.addArrangedSubview(includeOptionCheckbox)
+
+        validationLabel = NSTextField(wrappingLabelWithString: "")
+        validationLabel.font = NSFont.systemFont(ofSize: 11)
+        validationLabel.textColor = .secondaryLabelColor
+        validationLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 370).isActive = true
+        root.addArrangedSubview(validationLabel)
+
+        previewInput = NSTextField(string: "")
+        previewInput.placeholderString = "Sample text (press Return)"
+        previewInput.target = self
+        previewInput.action = #selector(previewChanged(_:))
+        root.addArrangedSubview(makeRow(label: "Preview:", control: previewInput))
+
+        previewOutput = NSTextField(wrappingLabelWithString: "Enter sample text to verify this layout pair.")
+        previewOutput.font = NSFont.systemFont(ofSize: 11)
+        previewOutput.textColor = .secondaryLabelColor
+        previewOutput.widthAnchor.constraint(lessThanOrEqualToConstant: 370).isActive = true
+        root.addArrangedSubview(previewOutput)
 
         root.addArrangedSubview(separatorView())
 
@@ -128,24 +162,31 @@ class SettingsWindowController: NSWindowController {
         root.addArrangedSubview(launchCheckbox)
 
         let hint = NSTextField(wrappingLabelWithString:
-            "Select text, then double-press the trigger key to convert between layouts.")
+            "Dead-key composition is not converted. Automatic conversion stops on ambiguous text.")
         hint.font = NSFont.systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
         hint.widthAnchor.constraint(lessThanOrEqualToConstant: 350).isActive = true
         root.addArrangedSubview(hint)
+
+        refreshLayoutValidation()
     }
 
     private func syncConverterWithPopups() {
         guard !layouts.isEmpty else { return }
         let fromIdx = max(0, fromPopup.indexOfSelectedItem)
         let toIdx   = max(0, toPopup.indexOfSelectedItem)
-        if fromIdx < layouts.count {
-            converter.fromLayout = layouts[fromIdx]
-            settings.fromLayoutID = layouts[fromIdx].id
-        }
-        if toIdx < layouts.count {
-            converter.toLayout = layouts[toIdx]
-            settings.toLayoutID = layouts[toIdx].id
+        guard fromIdx < layouts.count, toIdx < layouts.count else { return }
+        let from = layouts[fromIdx]
+        let to = layouts[toIdx].id == from.id
+            ? layouts.first(where: { $0.id != from.id })
+            : layouts[toIdx]
+
+        converter.fromLayout = from
+        settings.fromLayoutID = from.id
+        converter.toLayout = to
+        settings.toLayoutID = to?.id
+        if let to, let index = layouts.firstIndex(of: to) {
+            toPopup.selectItem(at: index)
         }
     }
 
@@ -197,16 +238,38 @@ class SettingsWindowController: NSWindowController {
         let idx = sender.indexOfSelectedItem
         guard idx >= 0, idx < layouts.count else { return }
         let layout = layouts[idx]
+        guard layout.id != converter.toLayout?.id else {
+            restoreSelection(in: sender, layout: converter.fromLayout)
+            refreshLayoutValidation(message: "From and To layouts must be different.")
+            return
+        }
         converter.fromLayout = layout
         settings.fromLayoutID = layout.id
+        refreshLayoutValidation()
     }
 
     @objc private func toChanged(_ sender: NSPopUpButton) {
         let idx = sender.indexOfSelectedItem
         guard idx >= 0, idx < layouts.count else { return }
         let layout = layouts[idx]
+        guard layout.id != converter.fromLayout?.id else {
+            restoreSelection(in: sender, layout: converter.toLayout)
+            refreshLayoutValidation(message: "From and To layouts must be different.")
+            return
+        }
         converter.toLayout = layout
         settings.toLayoutID = layout.id
+        refreshLayoutValidation()
+    }
+
+    @objc private func directionChanged(_ sender: NSPopUpButton) {
+        guard
+            let rawValue = sender.selectedItem?.representedObject as? String,
+            let direction = KeyboardConverter.ConversionDirection(rawValue: rawValue)
+        else { return }
+        converter.conversionDirection = direction
+        settings.conversionDirection = direction
+        refreshPreview()
     }
 
     @objc private func triggerChanged(_ sender: NSPopUpButton) {
@@ -240,6 +303,7 @@ class SettingsWindowController: NSWindowController {
         let enabled = sender.state == .on
         converter.includeOptionModifierVariants = enabled
         settings.includeOptionModifierVariants = enabled
+        refreshPreview()
     }
 
     @objc private func launchToggled(_ sender: NSButton) {
@@ -249,10 +313,50 @@ class SettingsWindowController: NSWindowController {
             else       { try SMAppService.mainApp.unregister() }
         } catch {
             sender.state = enable ? .off : .on
+            refreshLayoutValidation(message: "Launch at login failed: \(error.localizedDescription)")
         }
     }
 
     private func isLaunchAtLoginEnabled() -> Bool {
         SMAppService.mainApp.status == .enabled
+    }
+
+    @objc private func previewChanged(_ sender: NSTextField) {
+        refreshPreview()
+    }
+
+    private func refreshPreview() {
+        let text = previewInput?.stringValue ?? ""
+        guard !text.isEmpty else {
+            previewOutput?.stringValue = "Enter sample text to verify this layout pair."
+            return
+        }
+
+        switch converter.conversion(for: text) {
+        case let .converted(converted):
+            previewOutput.stringValue = converted
+        case let .ambiguous(forward, reverse):
+            previewOutput.stringValue = "Ambiguous: From → To = \(forward); To → From = \(reverse)"
+        case .unchanged:
+            previewOutput.stringValue = "No characters can be converted."
+        case .unavailable:
+            previewOutput.stringValue = "Choose two different keyboard layouts."
+        }
+    }
+
+    private func refreshLayoutValidation(message: String? = nil) {
+        if let message {
+            validationLabel?.stringValue = message
+        } else if layouts.count < 2 {
+            validationLabel?.stringValue = "Install and enable at least two keyboard layouts in macOS."
+        } else {
+            validationLabel?.stringValue = ""
+        }
+        refreshPreview()
+    }
+
+    private func restoreSelection(in popup: NSPopUpButton, layout: KeyboardConverter.Layout?) {
+        guard let layout, let index = layouts.firstIndex(of: layout) else { return }
+        popup.selectItem(at: index)
     }
 }

@@ -42,4 +42,14 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(settings.fromLayoutID, "from")
         XCTAssertEqual(settings.toLayoutID, "to")
     }
+
+    func testConversionDirectionDefaultsToSafeAutomaticMode() {
+        XCTAssertEqual(settings.conversionDirection, .automatic)
+    }
+
+    func testConversionDirectionPersists() {
+        settings.conversionDirection = .toFrom
+
+        XCTAssertEqual(settings.conversionDirection, .toFrom)
+    }
 }

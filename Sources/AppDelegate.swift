@@ -10,33 +10,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsController: SettingsWindowController?
 
     private var isEnabled = true
+    private var enableMenuItem: NSMenuItem!
     private var accessibilityMenuItem: NSMenuItem!
+    private var statusMenuItem: NSMenuItem!
     private var accessibilityPollTimer: Timer?
-    private var wasAccessibilityGranted = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         converter       = KeyboardConverter()
         shortcutManager = ShortcutManager(converter: converter)
+        shortcutManager.onResult = { [weak self] result in
+            DispatchQueue.main.async {
+                self?.updateConversionStatus(result)
+            }
+        }
 
         applyStoredSettings()
         setupStatusBar()
-        shortcutManager.start()
 
         AXIsProcessTrustedWithOptions(
             [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
         )
 
-        wasAccessibilityGranted = AXIsProcessTrusted()
+        refreshShortcutMonitoring()
 
-        if !wasAccessibilityGranted {
+        if !AXIsProcessTrusted() {
             accessibilityPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
                 guard let self else { return }
                 if AXIsProcessTrusted() {
                     self.accessibilityPollTimer?.invalidate()
                     self.accessibilityPollTimer = nil
-                    self.shortcutManager.stop()
-                    self.shortcutManager.start()
-                    self.updateAccessibilityMenuItem(trusted: true)
+                    self.refreshShortcutMonitoring()
                 }
             }
         }
@@ -61,7 +64,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // To layout — restore or default to second distinct layout
         if let id = settings.toLayoutID,
-           let layout = layouts.first(where: { $0.id == id }) {
+           let layout = layouts.first(where: { $0.id == id }),
+           layout.id != converter.fromLayout?.id {
             converter.toLayout = layout
         } else {
             let second = layouts.first { $0.id != converter.fromLayout?.id }
@@ -82,6 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Cmd+A+A shortcut
         shortcutManager.cmdDoubleAEnabled = settings.cmdDoubleAEnabled
+        converter.conversionDirection = settings.conversionDirection
 
         // Option/Alt modifier variants
         converter.includeOptionModifierVariants = settings.includeOptionModifierVariants
@@ -102,12 +107,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.delegate = self
 
-        let enableItem = NSMenuItem(title: "Enabled",
+        enableMenuItem = NSMenuItem(title: "Enabled",
                                     action: #selector(toggleEnabled(_:)),
                                     keyEquivalent: "")
-        enableItem.state  = .on
-        enableItem.target = self
-        menu.addItem(enableItem)
+        enableMenuItem.state  = .on
+        enableMenuItem.target = self
+        menu.addItem(enableMenuItem)
+
+        statusMenuItem = NSMenuItem(title: "Checking requirements…", action: nil, keyEquivalent: "")
+        statusMenuItem.isEnabled = false
+        menu.addItem(statusMenuItem)
 
         menu.addItem(.separator())
 
@@ -139,13 +148,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleEnabled(_ sender: NSMenuItem) {
         isEnabled.toggle()
         sender.state = isEnabled ? .on : .off
-
-        let symbol = isEnabled ? "keyboard" : "keyboard.badge.ellipsis"
-        statusItem.button?.image = NSImage(systemSymbolName: symbol,
-                                           accessibilityDescription: "Retype")
-        statusItem.button?.image?.isTemplate = true
-
-        if isEnabled { shortcutManager.start() } else { shortcutManager.stop() }
+        refreshShortcutMonitoring()
     }
 
     @objc private func openAccessibilitySettings() {
@@ -162,6 +165,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             accessibilityMenuItem.title  = "Accessibility not granted - click to fix"
             accessibilityMenuItem.action = #selector(openAccessibilitySettings)
         }
+    }
+
+    private func refreshShortcutMonitoring() {
+        let trusted = AXIsProcessTrusted()
+        let hasPair = converter.hasUsableLayoutPair
+        let shouldRun = isEnabled && trusted && hasPair
+
+        if shouldRun { shortcutManager.start() } else { shortcutManager.stop() }
+
+        updateAccessibilityMenuItem(trusted: trusted)
+        enableMenuItem?.isEnabled = trusted && hasPair
+
+        if !trusted {
+            updateStatus("Accessibility permission required")
+        } else if !hasPair {
+            updateStatus("Choose two different keyboard layouts in Settings")
+        } else if !isEnabled {
+            updateStatus("Conversion disabled")
+        } else {
+            updateStatus("Ready")
+        }
+    }
+
+    private func updateConversionStatus(_ result: ConversionTransactionResult) {
+        switch result {
+        case .converted:
+            updateStatus("Converted")
+        case .ambiguous:
+            updateStatus("Ambiguous text — choose an explicit direction in Settings")
+        case .unchanged:
+            updateStatus("Selection cannot be converted with the current layouts")
+        case .noText:
+            updateStatus("No plain text in the selection")
+        case .copyTimedOut:
+            updateStatus("Could not copy the selection")
+        case .busy:
+            updateStatus("Conversion already in progress")
+        }
+    }
+
+    private func updateStatus(_ message: String) {
+        statusMenuItem?.title = message
+        let active = message == "Ready"
+        let symbol = active ? "keyboard" : "keyboard.badge.ellipsis"
+        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: message)
+        statusItem?.button?.image?.isTemplate = true
     }
 
     @objc private func openSettings() {
@@ -183,6 +232,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
-        updateAccessibilityMenuItem(trusted: AXIsProcessTrusted())
+        refreshShortcutMonitoring()
     }
 }

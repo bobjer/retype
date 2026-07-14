@@ -7,10 +7,15 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Run unit tests
         run: ./test.sh
       - name: Build app bundle
         run: ./build.sh
+      - name: Verify bundle metadata
+        run: |
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/Retype.app/Contents/Info.plist)" = "$(tr -d '[:space:]' < VERSION)"
+          test -n "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' build/Retype.app/Contents/Info.plist)"
+          codesign --verify --deep --strict build/Retype.app

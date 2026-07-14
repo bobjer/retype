@@ -31,21 +31,24 @@ The text is replaced with the correct layout version automatically.
 
 Click the **RT** icon in the menu bar → **Settings**:
 
-- **From / To layout** — which layouts to convert between
+- **From / To layout** — two distinct layouts to convert between
+- **Direction** — safe automatic detection, or an explicit direction for mixed text
 - **Convert Option/Alt characters** — include characters typed with Option/Alt, enabled by default
 - **Trigger key** — Left Shift, Right Shift, Left Control, Left Option, Left Command
 - **Timeout** — how fast the double-press must be (0.2–1.0 s)
 - **Cmd+A+A** — alternative trigger: hold ⌘, press A twice (selects all + converts)
 - **Launch at login** — start Retype automatically
 
+The Settings window includes a sample-text preview. Automatic mode leaves ambiguous or mixed-layout text unchanged instead of guessing.
+
 ## Requirements
 
 - macOS 13 Ventura or later
-- Accessibility permission (for reading keyboard input and clipboard)
+- Accessibility permission (for receiving global keyboard events and replacing selected text)
 
 ## How it works
 
-Retype uses macOS accessibility APIs to detect the double-press, copies the selected text via `Cmd+C`, remaps each character between the two layouts using the system's own keyboard layout data (UCKeyTranslate), then pastes the result back.
+Retype uses global keyboard events to detect the double-press, copies the selected text via `Cmd+C`, remaps each character between the two layouts using the system's own keyboard layout data (UCKeyTranslate), then pastes the result back. Clipboard restoration uses a Retype-owned transaction marker, so a newer clipboard item from you or another app is never overwritten.
 
 No text is sent anywhere — everything happens locally.
 
@@ -74,12 +77,15 @@ Run the optional installed-layout smoke test with:
 
 ## Packaging
 
-`./package.sh` is a developer command. It builds a signed app bundle, zips it, and writes a Homebrew Cask that installs that prebuilt zip. End users who install the generated cask do not need Xcode because the cask does not compile source.
+`./package.sh` is the release command. It requires a Developer ID Application certificate and a `notarytool` keychain profile, then signs, notarizes, staples, and packages the app. It renders the Cask only after calculating the SHA-256 of the final notarized zip.
 
 Packaging requirements for the developer machine:
 
-- Xcode Command Line Tools for `swiftc`
-- Homebrew for generating/updating the local cask tap
+- Xcode command-line tools
+- `SIGNING_IDENTITY` with a Developer ID Application certificate
+- `NOTARY_PROFILE` stored with `xcrun notarytool store-credentials`
+
+The tag workflow publishes `v<version>` and updates `bobjer/homebrew-retype`. It requires the Apple signing/notarization secrets and `HOMEBREW_TAP_TOKEN`; the workflow fails explicitly when they are missing.
 
 ## Troubleshooting
 
